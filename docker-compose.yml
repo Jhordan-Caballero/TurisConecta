@@ -1,0 +1,25 @@
+
+services:
+  backend:
+    build: 
+      context: ./backend
+    container_name: turisconecta_api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://database:27017
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - database
+
+  database:
+    image: mongo:latest
+    container_name: turisconecta_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

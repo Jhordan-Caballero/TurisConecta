@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+pymongo
+pandas
+python-dotenv
+passlib
+python-jose
+pytest
