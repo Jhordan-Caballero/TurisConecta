@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api, mensajeError } from '../services/api';
+
+// Deben coincidir exactamente con los nombres de localidad que usan los servicios.
+const LOCALIDADES = [
+  'Chivay & Valle del Colca',
+  'Yanque & Coporaque',
+  'Arequipa Centro Histórico',
+];
 
 export default function Registro() {
   const { login } = useAuth();
@@ -10,16 +18,56 @@ export default function Registro() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rol, setRol] = useState('turista');
+  const [localidad, setLocalidad] = useState(LOCALIDADES[0]);
+  const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login({
-      nombre: nombre.trim() || (rol === 'poblador' ? 'María López' : 'Carlos Mendoza'),
-      email: email.trim() || 'usuario@turisconecta.pe',
+    setError('');
+    setCargando(true);
+
+    const payload = {
+      nombre: nombre.trim(),
+      email: email.trim(),
+      password,
       rol,
-    });
-    navigate(rol === 'poblador' ? '/poblador/dashboard' : '/turista/home');
+    };
+    if (rol === 'poblador') payload.localidad = localidad;
+
+    try {
+      const { data } = await api.post('/auth/registro', payload);
+      login(data, payload.email);
+      navigate(data.rol === 'poblador' ? '/poblador/dashboard' : '/turista/home');
+    } catch (err) {
+      setError(mensajeError(err));
+    } finally {
+      setCargando(false);
+    }
   };
+
+  const tarjetaRol = (valor, titulo, descripcion) => (
+    <label
+      className={`flex items-center p-3 rounded-xl border cursor-pointer transition ${
+        rol === valor
+          ? 'border-emerald-400 bg-emerald-50/70'
+          : 'border-slate-200 bg-white hover:bg-slate-50'
+      }`}
+    >
+      <input
+        type="radio"
+        name="rol"
+        value={valor}
+        checked={rol === valor}
+        onChange={() => setRol(valor)}
+        className="accent-emerald-700"
+      />
+      <div className="ml-2.5">
+        <span className="block text-xs font-bold text-slate-900">{titulo}</span>
+        <span className="block text-[10px] text-slate-500">{descripcion}</span>
+      </div>
+    </label>
+  );
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 bg-white">
@@ -80,6 +128,8 @@ export default function Registro() {
               </label>
               <input
                 type="text"
+                required
+                minLength={2}
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Ej. Carlos Mendoza"
@@ -93,6 +143,7 @@ export default function Registro() {
               </label>
               <input
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="correo@ejemplo.com"
@@ -106,6 +157,9 @@ export default function Registro() {
               </label>
               <input
                 type="password"
+                required
+                minLength={8}
+                maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 8 caracteres"
@@ -118,55 +172,40 @@ export default function Registro() {
                 ¿Cómo te registras?
               </label>
               <div className="grid grid-cols-2 gap-2.5">
-                <label
-                  className={`flex items-center p-3 rounded-xl border cursor-pointer transition ${
-                    rol === 'turista'
-                      ? 'border-emerald-400 bg-emerald-50/70'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="rol"
-                    value="turista"
-                    checked={rol === 'turista'}
-                    onChange={() => setRol('turista')}
-                    className="accent-emerald-700"
-                  />
-                  <div className="ml-2.5">
-                    <span className="block text-xs font-bold text-slate-900">🎒 Turista</span>
-                    <span className="block text-[10px] text-slate-500">Viajar y planificar</span>
-                  </div>
-                </label>
-
-                <label
-                  className={`flex items-center p-3 rounded-xl border cursor-pointer transition ${
-                    rol === 'poblador'
-                      ? 'border-emerald-400 bg-emerald-50/70'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="rol"
-                    value="poblador"
-                    checked={rol === 'poblador'}
-                    onChange={() => setRol('poblador')}
-                    className="accent-emerald-700"
-                  />
-                  <div className="ml-2.5">
-                    <span className="block text-xs font-bold text-slate-900">🏡 Poblador</span>
-                    <span className="block text-[10px] text-slate-500">Ofrecer servicios</span>
-                  </div>
-                </label>
+                {tarjetaRol('turista', '🎒 Turista', 'Viajar y planificar')}
+                {tarjetaRol('poblador', '🏡 Poblador', 'Ofrecer servicios')}
               </div>
             </div>
 
+            {rol === 'poblador' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tu localidad
+                </label>
+                <select
+                  value={localidad}
+                  onChange={(e) => setLocalidad(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                >
+                  {LOCALIDADES.map((l) => (
+                    <option key={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {error && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full mt-3 bg-[#1b4332] hover:bg-[#2d6a4f] text-white py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+              disabled={cargando}
+              className="w-full mt-3 bg-[#1b4332] hover:bg-[#2d6a4f] disabled:opacity-60 text-white py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>✨</span> Crear cuenta y Acceder
+              <span>✨</span> {cargando ? 'Creando cuenta…' : 'Crear cuenta y Acceder'}
             </button>
           </form>
 

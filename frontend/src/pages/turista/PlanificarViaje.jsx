@@ -1,34 +1,73 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavbarTurista from '../../components/NavbarTurista';
+import { api, mensajeError } from '../../services/api';
+
+// "valor" es lo que se envía al backend: vacío significa todas las localidades.
+const LOCALIDADES = [
+  { label: 'Todas las localidades (Colca + Ciudad)', valor: '' },
+  { label: 'Chivay & Valle del Colca', valor: 'Chivay & Valle del Colca' },
+  { label: 'Yanque & Coporaque', valor: 'Yanque & Coporaque' },
+  { label: 'Arequipa Centro Histórico', valor: 'Arequipa Centro Histórico' },
+];
+
+const OPCIONES_INTERES = [
+  { label: '🧗 Aventura', valor: 'Aventura' },
+  { label: '🏛️ Cultura', valor: 'Cultura' },
+  { label: '🍲 Comida', valor: 'Comida' },
+  { label: '🌿 Naturaleza', valor: 'Naturaleza' },
+];
 
 export default function PlanificarViaje() {
   const navigate = useNavigate();
 
   const [presupuesto, setPresupuesto] = useState(500);
-  const [dias, setDias] = useState('3 días');
-  const [personas, setPersonas] = useState('2 personas');
-  const [localidad, setLocalidad] = useState('Todas las localidades (Colca + Ciudad)');
-  const [intereses, setIntereses] = useState(['Aventura', 'Cultura', 'Comida', 'Naturaleza']);
-
-  const opcionesInteres = [
-    { label: '🧗 Aventura', valor: 'Aventura' },
-    { label: '🏛️ Cultura', valor: 'Cultura' },
-    { label: '🍲 Comida', valor: 'Comida' },
-    { label: '🌿 Naturaleza', valor: 'Naturaleza' },
-  ];
+  const [dias, setDias] = useState(3);
+  const [personas, setPersonas] = useState(2);
+  const [localidad, setLocalidad] = useState('');
+  const [intereses, setIntereses] = useState(OPCIONES_INTERES.map((o) => o.valor));
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
 
   const toggleInteres = (valor) => {
-    setIntereses((prev) =>
-      prev.includes(valor) ? prev.filter((item) => item !== valor) : [...prev, valor]
-    );
+    setIntereses((prev) => {
+      if (prev.includes(valor)) {
+        // El backend exige al menos un interés.
+        return prev.length === 1 ? prev : prev.filter((item) => item !== valor);
+      }
+      return [...prev, valor];
+    });
   };
 
-  const handleGenerar = (e) => {
+  const handleGenerar = async (e) => {
     e.preventDefault();
-    navigate('/turista/itinerario', {
-      state: { presupuesto: Number(presupuesto) || 500, dias, personas, localidad, intereses },
-    });
+    setError('');
+    setCargando(true);
+
+    const cuerpo = {
+      presupuesto: Number(presupuesto),
+      dias: Number(dias),
+      personas: Number(personas),
+      intereses,
+      localidad: localidad || null,
+    };
+
+    try {
+      const { data } = await api.post('/itinerario', cuerpo);
+      navigate('/turista/itinerario', {
+        state: {
+          plan: data,
+          presupuesto: Number(presupuesto),
+          personas: Number(personas),
+          dias: Number(dias),
+          localidad: LOCALIDADES.find((l) => l.valor === localidad).label,
+        },
+      });
+    } catch (err) {
+      setError(mensajeError(err));
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
@@ -55,7 +94,8 @@ export default function PlanificarViaje() {
                   </label>
                   <input
                     type="number"
-                    min="100"
+                    min="1"
+                    required
                     value={presupuesto}
                     onChange={(e) => setPresupuesto(e.target.value)}
                     className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
@@ -71,11 +111,11 @@ export default function PlanificarViaje() {
                     onChange={(e) => setDias(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium"
                   >
-                    <option>1 día</option>
-                    <option>2 días</option>
-                    <option>3 días</option>
-                    <option>4 días</option>
-                    <option>5 días</option>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n} {n === 1 ? 'día' : 'días'}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -86,10 +126,11 @@ export default function PlanificarViaje() {
                     onChange={(e) => setPersonas(e.target.value)}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white font-medium"
                   >
-                    <option>1 persona</option>
-                    <option>2 personas</option>
-                    <option>3 personas</option>
-                    <option>4+ personas</option>
+                    {[1, 2, 3, 4].map((n) => (
+                      <option key={n} value={n}>
+                        {n === 4 ? '4+ personas' : `${n} ${n === 1 ? 'persona' : 'personas'}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -99,7 +140,7 @@ export default function PlanificarViaje() {
                   Intereses y gustos
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {opcionesInteres.map((op) => {
+                  {OPCIONES_INTERES.map((op) => {
                     const activo = intereses.includes(op.valor);
                     return (
                       <label
@@ -132,18 +173,26 @@ export default function PlanificarViaje() {
                   onChange={(e) => setLocalidad(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white"
                 >
-                  <option>Todas las localidades (Colca + Ciudad)</option>
-                  <option>Chivay & Valle del Colca</option>
-                  <option>Yanque & Coporaque</option>
-                  <option>Arequipa Centro Histórico</option>
+                  {LOCALIDADES.map((l) => (
+                    <option key={l.label} value={l.valor}>
+                      {l.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
+              {error && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
+
               <button
                 type="submit"
-                className="w-full mt-2 bg-[#1b4332] hover:bg-[#2d6a4f] text-white py-3 rounded-xl font-bold text-xs shadow-md transition cursor-pointer"
+                disabled={cargando}
+                className="w-full mt-2 bg-[#1b4332] hover:bg-[#2d6a4f] disabled:opacity-60 text-white py-3 rounded-xl font-bold text-xs shadow-md transition cursor-pointer"
               >
-                ✨ Generar Itinerario Inteligente
+                {cargando ? 'Armando tu plan…' : '✨ Generar Itinerario Inteligente'}
               </button>
             </form>
           </div>

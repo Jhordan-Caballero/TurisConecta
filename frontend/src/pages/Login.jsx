@@ -1,48 +1,29 @@
 import { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-
-function detectarRolLocal(email) {
-  const limpio = email.trim().toLowerCase();
-  if (
-    limpio.includes('poblador') ||
-    limpio.includes('comunidad') ||
-    limpio.includes('quispe')
-  ) {
-    return 'poblador';
-  }
-  return 'turista';
-}
+import { api, mensajeError } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('maria.lopez@turisconecta.pe');
-  const [password, setPassword] = useState('12345678');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Mientras conectas el backend, detecta el rol por el correo
-    // (o usa location.state?.rol si vino con un rol sugerido y no se cambió)
-    const rolDetectado =
-      location.state?.rol || detectarRolLocal(email);
-
-    const nombreUsuario =
-      rolDetectado === 'poblador' ? 'María Quispe' : 'Carlos Mendoza';
-
-    login({
-      email,
-      rol: rolDetectado,
-      nombre: nombreUsuario,
-    });
-
-    if (rolDetectado === 'poblador') {
-      navigate('/poblador/dashboard');
-    } else {
-      navigate('/turista/home');
+    setError('');
+    setCargando(true);
+    try {
+      const { data } = await api.post('/auth/login', { email: email.trim(), password });
+      login(data, email.trim());
+      navigate(data.rol === 'poblador' ? '/poblador/dashboard' : '/turista/home');
+    } catch (err) {
+      setError(mensajeError(err));
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -82,7 +63,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Panel derecho: Solo correo, contraseña y un botón */}
+      {/* Panel derecho */}
       <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 sm:p-10 bg-white">
         <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
           <div className="text-center mb-6">
@@ -123,11 +104,18 @@ export default function Login() {
             />
           </div>
 
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
           <button
             type="submit"
-            className="w-full bg-[#1b4332] hover:bg-[#2d6a4f] text-white py-3 rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
+            disabled={cargando}
+            className="w-full bg-[#1b4332] hover:bg-[#2d6a4f] disabled:opacity-60 text-white py-3 rounded-xl font-bold text-sm shadow-sm transition cursor-pointer"
           >
-            Iniciar sesión
+            {cargando ? 'Ingresando…' : 'Iniciar sesión'}
           </button>
 
           <div className="pt-3 text-center space-y-2 text-xs text-slate-500">
